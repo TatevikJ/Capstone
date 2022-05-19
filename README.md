@@ -1,4 +1,4 @@
-# Tatevik Jalatyans's Capstone Project
+# Tatevik Jalatyan's Capstone Project
 
 ## Data
 The simulated chimeric library datasets are input_files/Chimeric_lib_simulated.sv and input_files/Enriched_lib_simulated.fastq.gz, respectively.
