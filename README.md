@@ -34,19 +34,35 @@ The main output files for the paper are located in hafoe_out_sim_100_15/ directo
 
 ### System requirements
 In your system you have to have: 
+ 
   R (version 4.1 or higher) with the following packages:
+ 
         dplyr: version 1.0.9
+ 
         ORFik: version 1.12.13
+ 
         plotly: version 4.10.0
+ 
         ggplot2: version 3.3.6
+ 
         gplots: version 3.1.3
+ 
         microseq: version 2.1.4
+ 
         Biostrings: version 2.60.2
+ 
         stringr: version 1.4.0
+ 
         cowplot: version 1.1.1
+ 
         seqinr: version 4.2.8 
+ 
   Bowtie 2 (v2.4.2) (https://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.4.5/), 
+ 
   CD-HIT (v4.8.1) (https://github.com/weizhongli/cdhit), 
+ 
   Clustal Omega (v1.2.4) (http://www.clustal.org/omega/) and 
+ 
   samtools version 1.9 or higher installed (http://www.htslib.org/download/) 
+ 
 
