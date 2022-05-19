@@ -7,7 +7,9 @@ The simulated chimeric library datasets are input_files/Chimeric_lib_simulated.s
 Pdf file of the report is Capstone_Paper_TJ.pdf and accompanying latex files are in Capstone Paper latex.zip.
 
 ## Data simulation
-The data simulation code is data_simulation.Rmd, which generates and stores the datasets into input_files/ directory. The code also includes making visualizations on the simulated data and stores the figures in data_simulation_plots/ directory
+The data simulation code is data_simulation.Rmd, which generates and stores the datasets into input_files/ directory. The code also includes making visualizations on the simulated data and stores the figures in data_simulation_plots/ directory. The files in this directory correspond to Fgures 3a, 4a, 7, 8 of the paper
+
+This code also uses csv files from accuracy_files/ directory to generate Figure 11 of the paper.
 
 ## Running the main program
 ### Operating Systems
