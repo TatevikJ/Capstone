@@ -1,0 +1,569 @@
+---
+title: "Generate data"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(seqinr)
+library(stringr)
+library(gplots)
+```
+
+```{r}
+fileName <- "input_files/AAV_all16_new.clustal_num"
+format <- "clustal"
+
+alignment <- seqinr::read.alignment(fileName, format = format, forceToLower = F)
+```
+
+```{r}
+set.seed(1)
+reads_num = 300
+aav_num = alignment$nb
+fragment_size_min = 100 
+fragment_size_max = 700 
+aln_len = nchar(alignment$seq[1])
+
+
+serotype_name <- c(
+  "NC_002077.1",
+  "NC_001401.2",  #old "ENA|J01901|J01901.1"
+  "ENA|U48704|U48704.1" ,
+  "NC_001829.1",
+  "NC_006152.1",
+  "ENA|AF028704|AF028704.1",
+  "ENA|AF513851|AF513851.1",
+  "ENA|AAN03857|AAN03857.1",
+  "ENA|AAS99264|AAS99264.1",
+  "ENA|AAT46337|AAT46337.1",
+  "AY631966.1",
+  "DQ813647.1",
+  "EU285562.1",
+  "AY242997.1", #AAVrh8
+  "AY243015.1", #AAVrh10
+  "AY243003.1") #AAVrh32
+
+biased_aav_nums <- c(rep(2, 20), rep(14, 15), rep(6, 10), rep(7, 8), rep(9, 6), 
+                     rep(8, 5), rep(13, 5), rep(1, 4), rep(5, 2), rep(3, 1), 
+                     rep(15, 1))
+
+seqs <- c()
+seq_labels <- c()
+
+for (i in seq(1, reads_num)){
+  cursor <- 1
+  seq <- ""
+  seq_label_list <- c()
+  
+  while (cursor < aln_len) {
+    
+    #choose random serotype 
+    sero_idx <- sample(biased_aav_nums, 1, replace=T)  #1:aav_num uniform
+    #choose random cut position
+    cut <- sample((cursor + fragment_size_min) : (cursor + fragment_size_max), 1, replace=F) #cursor:aln_len
+    #to reduce diversity make limitation on cut positions to be divisible by 10 
+    while (cut %% 100 != 0){
+      cut <- sample((cursor + fragment_size_min) : (cursor + fragment_size_max), 1, replace=F)
+    }
+
+    #if cut position is near the end, take the fragment until the end
+    if (aln_len - cut <= fragment_size_min){
+      cut <- aln_len
+    }
+
+    #append seq, to generate the chimeric sequence
+    seq <- paste0(seq, substring(alignment$seq[which(alignment$nam == serotype_name[sero_idx])], cursor, cut))  #sero_idx -> 
+    #append seq_label, to keep track of the chimeric sequence composition
+    seq_label_list <- c(seq_label_list, rep(sero_idx, (cut - cursor + 1)))
+    
+    #update cursor
+    cursor <- cut
+    
+  }
+  
+  #remove gap symbols from sequence and label list
+  gap_positions <- unlist(gregexpr('-', seq))
+  seq <- gsub("-", "", seq)
+  
+  seq_label_list <- seq_label_list[- gap_positions]
+
+  
+  #change all stop codons with aa encoding codons to have long orfs 
+  stop_positions <- unlist(gregexpr(seq, pattern = "TGA"))
+  stop_positions <- c(stop_positions, unlist(gregexpr(seq, pattern = "TAG")))
+  stop_positions <- c(stop_positions, unlist(gregexpr(seq, pattern = "TAA")))
+
+  for (i in stop_positions){
+    substr(seq, i, i) <- "C"
+  }
+  
+  #revert the change for the last stop codon (CAA -> TAA)
+  substr(seq, nchar(seq)-2, nchar(seq)-2) <- "T"
+  
+  #few orfs so delete 1 or 2 nts right before stop codon 
+  if ((nchar(seq) %% 3) == 1){
+    seq <- substring(seq, 1, nchar(seq)-4)   #remove NTAA, add TAA
+    seq <- paste0(seq, "TAA")
+
+    seq_label_list <- seq_label_list[- (length(seq_label_list) - 3)]
+  } else if ((nchar(seq) %% 3) == 2){
+    seq <-  substring(seq, 1, nchar(seq)-5)   #remove NNTAA, add TAA
+    seq <- paste0(seq, "TAA")
+
+    seq_label_list <- seq_label_list[- c((length(seq_label_list) - 4), (length(seq_label_list) - 3))]
+  }
+  
+  seq_label <- paste(seq_label_list, collapse = " ")
+
+  seqs <- c(seqs, seq)
+  seq_labels <- c(seq_labels, seq_label)
+}  
+
+df <- data.frame(chimeric_seq = seqs,
+                 composition = seq_labels)
+
+
+
+df['count'] <- sample(1:50, 300, replace = T)
+
+```
+
+```{r}
+
+df_100 <- df[sample(nrow(df), 100), ]
+s <- stringr::str_split(unlist(df_100[,2], 1), " ")
+
+
+col_num <- max(nchar(df_100[,1]))
+for (i in seq_len(length(s))){
+  if (length(s[[i]]) < col_num){
+    s[[i]] <- c(s[[i]], rep("18", col_num - length(s[[i]]))) #gap
+  }
+}
+
+m_new <- matrix(as.numeric(unlist(s)), ncol = col_num, byrow = TRUE)
+```
+
+```{r}
+plot.variant.description <- function(matrix, library_name = ""){
+  
+  col = c("#D3D3D3", "#A6CEE3", "#1F78B4", "#B2DF8A", "#555555", "#33A02C", 
+          "#FB9A99", "#E31A1C", "#FDBF6F", "#FF7F00", "#CAB2D6", "#6A3D9A", 
+          "#FFFF99", "#B15928", "yellow", "#999999", "#a70000", "black", "white")
+  legend_name <- c("no alignment", "AAV1", "AAV2", "AAV3", "AAV4", "AAV5",
+                   "AAV6", "AAV7", "AAV8", "AAV9", "AAV10", "AAV11", "AAV12", 
+                   "AAV13", "AAVrh8", "AAVrh10", "AAVrh32", "multiple alignment", "gap")
+  gplots::heatmap.2(matrix, 
+                    dendrogram='none', 
+                    Colv=FALSE, 
+                    Rowv=FALSE, 
+                    trace="none", 
+                    breaks = seq(-0.5, 18.5, 1), 
+                    col = col, 
+                    key = FALSE, 
+                    cexRow=0.7)
+  title(paste0("Variant description of ", library_name), 
+        line = -2, 
+        adj = 0.6)
+  legend(x="bottomleft", 
+         legend=legend_name, 
+         fill=col,  
+         title = "AAV serotypes", 
+         title.adj = 0.2, 
+         inset=c(-.07, -.07), 
+         xpd=TRUE,
+         box.lwd = 0, 
+         cex = 0.6)
+}
+
+```
+
+```{r}
+plot.variant.description(m_new, library_name = "generated library (random 100)")
+```
+
+
+Chimeric lib
+
+```{r}
+#make chimeric library csv file
+chimeric_library <- df[c('chimeric_seq', 'count', 'composition')]
+
+chimeric_library <- as.data.frame(lapply(chimeric_library, rep, chimeric_library$count))
+chimeric_library['count'] <- 1
+index <- c(1:nrow(chimeric_library))
+chimeric_library[, "index"] <- index
+chimeric_library[, "X"] = paste0("AAV.", 100000 + as.numeric(chimeric_library$index))
+chimeric_true_labels <- chimeric_library[c('X', 'composition')]
+
+write.csv(chimeric_true_labels, "input_files/Chimeric_lib_simulated_labels.csv", row.names = F)
+
+chimeric_library <- chimeric_library[c('X', 'chimeric_seq','count')]
+colnames(chimeric_library) <- c( 'X', 'Sequence', 'Count')
+
+write.csv(chimeric_library, "input_files/Chimeric_lib_simulated.csv", row.names = F)
+```
+
+Enriched lib 
+
+```{r}
+set.seed(1)
+x0 <- rnorm(1000, mean = -1, sd = 0.5)
+x <- x0[x0 >= -1]
+x <- sample(x, 300)
+x <- round(x, 2)
+
+hist(x)
+
+enriched_count <- floor((1+x) * df$count)
+df['enriched_count'] <- enriched_count
+```
+
+```{r}
+x_df <- data.frame(x = x0)
+p1 <- ggplot(x_df, aes(x=x0)) + 
+            geom_histogram(aes(y=..density..), color="black", fill="grey", binwidth = 0.1) +
+            geom_density() +
+            annotate("rect", xmin = -3, xmax = -1, ymin = 0, ymax = 1, alpha = .8, fill = "white") +
+            #xlim(-1, 0.5) + 
+            xlab("Fraction change") + 
+            #ylab("Count") + 
+            theme_minimal()
+
+graphics.off()
+pdf(file.path("data_simulation_plots/percent_change_distribution.pdf"), width=8, height=5)
+print(p1)
+dev.off()
+
+```
+
+```{r}
+p2 <- ggplot(df, aes(x=enriched_count)) + 
+            geom_histogram(color="black", fill="grey") +
+            xlab("Abundance in enriched library") + 
+            ylab("Count") + 
+            theme_minimal()
+
+graphics.off()
+pdf(file.path("data_simulation_plots/enriched_library_abundance_distribution.pdf"), width=8, height=5)
+print(p2)
+dev.off()
+```
+
+```{r}
+write.fastq <- function(fastq_file, output_path){
+  c = 1
+  while (c <= nrow(fastq_file)){
+    cat(paste0("@", fastq_file$Header[c]), #, "_"
+        fastq_file$Sequence[c],
+        "+",
+        fastq_file$Quality[c],
+        sep = "\n",
+        file = output_path,
+        append = TRUE)
+    c = c + 1
+  } 
+}
+```
+
+
+
+```{r}
+#make enriched 1 library fastq file
+
+enriched_library <- df[c('chimeric_seq', 'enriched_count')]
+enriched_library <- as.data.frame(lapply(enriched_library, rep, enriched_library$enriched_count))
+enriched_library['Quality'] <- strrep('~', nchar(enriched_library$chimeric_seq)) #highest quality score for PacBio
+index <- c(1:nrow(enriched_library))
+enriched_library[, "index"] <- index
+enriched_library[, "Header"] = paste0("enriched.read", as.numeric(enriched_library$index))
+
+enriched_library <- enriched_library[c('Header', 'chimeric_seq', 'Quality')]
+colnames(enriched_library) <- c('Header', 'Sequence', 'Quality')
+
+write.fastq(enriched_library, "input_files/Enriched_lib_simulated.fastq")
+system("rm input_files/Enriched_lib_simulated.fastq.gz")
+system("gzip input_files/Enriched_lib_simulated.fastq")
+
+```
+
+Accuracy
+
+```{r}
+get.accuracy <- function(predicted, chimeric_true_labels){
+  accuracies <- c()
+  for (i in predicted$X) {
+    pred <- as.numeric(unlist(stringr::str_split(predicted[predicted$X == i,]$composition, " ")))
+    pred <- pred[pred != 18]
+    true <- as.numeric(unlist(stringr::str_split(chimeric_true_labels[chimeric_true_labels$X == i,]$composition, " ")))
+  
+    acc <- round(sum(pred == true)*100/length(true), 2)
+    accuracies <- c(accuracies, acc)
+  }
+  avg_accuracy <- round(sum(accuracies)/length(accuracies))
+  return(avg_accuracy)
+}
+
+chimeric_true_labels <- read.csv("input_files/Chimeric_lib_simulated_labels.csv")
+
+```
+
+```{r}
+predicted_50_50 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_50_50.csv")
+predicted_50_25 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_50_25.csv")
+predicted_50_15 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_50_15.csv")
+predicted_50_10 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_50_10.csv")
+predicted_50_5 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_50_5.csv")
+
+predicted_100_100 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_100_100.csv")
+predicted_100_75 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_100_75.csv")
+predicted_100_50 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_100_50.csv")
+predicted_100_25 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_100_25.csv")
+predicted_100_15 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_100_15.csv")
+predicted_100_10 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_100_10.csv")
+predicted_100_5 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_100_5.csv")
+
+predicted_150_150 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_150_150.csv")
+predicted_150_125 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_150_125.csv")
+predicted_150_100 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_150_100.csv")
+predicted_150_75 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_150_75.csv")
+predicted_150_50 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_150_50.csv")
+predicted_150_25 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_150_25.csv")
+predicted_150_15 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_150_15.csv")
+predicted_150_10 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_150_10.csv")
+predicted_150_5 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_150_5.csv")
+
+predicted_200_200 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_200_200.csv")
+predicted_200_150 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_200_150.csv")
+predicted_200_125 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_200_125.csv")
+predicted_200_100 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_200_100.csv")
+predicted_200_75 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_200_75.csv")
+predicted_200_50 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_200_50.csv")
+predicted_200_25 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_200_25.csv")
+predicted_200_15 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_200_15.csv")
+predicted_200_10 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_200_10.csv")
+predicted_200_5 <- read.csv("accuracy_files/Chimeric_rep_predicted_labels_200_5.csv")
+
+
+acc_50_50 <- get.accuracy(predicted_50_50, chimeric_true_labels)
+acc_50_25 <- get.accuracy(predicted_50_25, chimeric_true_labels)
+acc_50_15 <- get.accuracy(predicted_50_15, chimeric_true_labels)
+acc_50_10 <- get.accuracy(predicted_50_10, chimeric_true_labels)
+acc_50_5 <- get.accuracy(predicted_50_5, chimeric_true_labels)
+
+acc_100_100 <- get.accuracy(predicted_100_100, chimeric_true_labels)
+acc_100_75 <- get.accuracy(predicted_100_75, chimeric_true_labels)
+acc_100_50 <- get.accuracy(predicted_100_50, chimeric_true_labels)
+acc_100_25 <- get.accuracy(predicted_100_25, chimeric_true_labels)
+acc_100_15 <- get.accuracy(predicted_100_15, chimeric_true_labels)
+acc_100_10 <- get.accuracy(predicted_100_10, chimeric_true_labels)
+acc_100_5 <- get.accuracy(predicted_100_5, chimeric_true_labels)
+
+acc_150_150 <- get.accuracy(predicted_150_150, chimeric_true_labels)
+acc_150_125 <- get.accuracy(predicted_150_125, chimeric_true_labels)
+acc_150_100 <- get.accuracy(predicted_150_100, chimeric_true_labels)
+acc_150_75 <- get.accuracy(predicted_150_75, chimeric_true_labels)
+acc_150_50 <- get.accuracy(predicted_150_50, chimeric_true_labels)
+acc_150_25 <- get.accuracy(predicted_150_25, chimeric_true_labels)
+acc_150_15 <- get.accuracy(predicted_150_15, chimeric_true_labels)
+acc_150_10 <- get.accuracy(predicted_150_10, chimeric_true_labels)
+acc_150_5 <- get.accuracy(predicted_150_5, chimeric_true_labels)
+
+acc_200_200 <- get.accuracy(predicted_200_200, chimeric_true_labels)
+acc_200_150 <- get.accuracy(predicted_200_150, chimeric_true_labels)
+acc_200_125 <- get.accuracy(predicted_200_125, chimeric_true_labels)
+acc_200_100 <- get.accuracy(predicted_200_100, chimeric_true_labels)
+acc_200_75 <- get.accuracy(predicted_200_75, chimeric_true_labels)
+acc_200_50 <- get.accuracy(predicted_200_50, chimeric_true_labels)
+acc_200_25 <- get.accuracy(predicted_200_25, chimeric_true_labels)
+acc_200_15 <- get.accuracy(predicted_200_15, chimeric_true_labels)
+acc_200_10 <- get.accuracy(predicted_200_10, chimeric_true_labels)
+acc_200_5 <- get.accuracy(predicted_200_5, chimeric_true_labels)
+
+```
+
+```{r}
+df2 <- data.frame(step_size=c("50", "25", "15", "10", "5",
+                              "100", "75", "50", "25", "15", "10", "5", 
+                              "150", "125", "100", "75", "50", "25", "15", "10", "5", 
+                              "200", "150", "125", "100", "75", "50", "25", "15", "10", "5"),
+                read_length=c(rep(50, 5),
+                              rep(100, 7),
+                              rep(150, 9), 
+                              rep(200, 10)),
+                accuracy=c(acc_50_50, acc_50_25, acc_50_15, acc_50_10, acc_50_5,
+                           acc_100_100, acc_100_75, acc_100_50, acc_100_25, acc_100_15, acc_100_10, acc_100_5,
+                           acc_150_150, acc_150_125, acc_150_100, acc_150_75, acc_150_50, acc_150_25, acc_150_15, acc_150_10, acc_150_5,
+                           acc_200_200, acc_200_150, acc_200_125, acc_200_100, acc_200_75, acc_200_50, acc_200_25, acc_200_15, acc_200_10, acc_200_5))
+
+library(RColorBrewer)
+nb.cols <- 10
+mycolors <- colorRampPalette(brewer.pal(8, "PuBu"))(nb.cols)
+
+p <- ggplot(data=df2, aes(x=read_length, y=accuracy, 
+                           fill=factor(step_size, levels = rev(c("5", "10", "15", "25", "50", "75", "100", "125", "150", "200"))))) +
+        geom_bar(stat="identity", position=position_dodge2(preserve = "single")) + 
+        scale_fill_manual("Step size, nt", values = mycolors) +
+        labs(title=paste0(""),
+                     x ="Read length, nt", y = "Accuracy (%)") +
+        theme_minimal()
+
+
+graphics.off()
+pdf(file.path("data_simulation_plots/variant_description_accuracy_comparison.pdf"), width=8, height=5)
+print(p)
+dev.off()
+
+```
+
+```{r}
+df2 <- data.frame(overlap=c("0", "25", "35", "40", "45",
+                            "0", "25", "50", "75", "85", "90", "95", 
+                            "0", "25", "50", "75", "100", "125", "135", "140", "145", 
+                            "0", "50", "75", "100", "125", "150", "175", "185", "190", "195"),
+                read_length=c(rep(50, 5),
+                              rep(100, 7),
+                              rep(150, 9), 
+                              rep(200, 10)),
+                accuracy=c(acc_50_50, acc_50_25, acc_50_15, acc_50_10, acc_50_5,
+                           acc_100_100, acc_100_75, acc_100_50, acc_100_25, acc_100_15, acc_100_10, acc_100_5,
+                           acc_150_150, acc_150_125, acc_150_100, acc_150_75, acc_150_50, acc_150_25, acc_150_15, acc_150_10, acc_150_5,
+                           acc_200_200, acc_200_150, acc_200_125, acc_200_100, acc_200_75, acc_200_50, acc_200_25, acc_200_15, acc_200_10, acc_200_5))
+
+
+library(RColorBrewer)
+nb.cols <- 20
+mycolors <- colorRampPalette(brewer.pal(8, "PuBu"))(nb.cols)
+
+p <- ggplot(data=df2, aes(x=read_length, y=accuracy, 
+                           fill=factor(overlap, levels = c("0", "25", "35", "40", "45", "50", "75", 
+                                                           "85", "90", "95", "100", "125", "135", "140", "145", 
+                                                           "150", "175", "185", "190", "195")))) +
+        geom_bar(stat="identity", position=position_dodge2(preserve = "single")) + 
+        scale_fill_manual("Overlap size", values = mycolors) +
+        labs(title=paste0(""),
+                     x ="Read length", y = "Accuracy (%)") +
+        theme_minimal() +
+        theme(legend.key.size = unit(3, 'mm')) 
+
+p
+
+```
+
+pipeline plots on data with true labels
+
+```{r}
+#Serotype distribution barplot on the whole chimeric library data 
+
+s_all <- stringr::str_split(unlist(chimeric_true_labels[,'composition'], 1), " ")
+
+col_num_all <- max(unlist(lapply(s_all, length)))
+for (i in seq_len(length(s_all))){
+  if (length(s_all[[i]]) < col_num_all){
+    s_all[[i]] <- c(s_all[[i]], rep("18", col_num_all - length(s_all[[i]]))) #gap
+  }
+}
+
+matrix_all <- matrix(as.numeric(unlist(s_all)), ncol = col_num_all, byrow = TRUE)
+rownames(matrix_all) <- chimeric_true_labels[, 'X']
+
+frequencies = matrix(nrow = nrow(matrix_all), ncol = 0)
+for (i in (0:18)){
+  frequencies = cbind(frequencies, rowSums(matrix_all == i))
+}
+
+colnames(frequencies) <- c("no alignment","AAV1","AAV2","AAV3","AAV4","AAV5","AAV6","AAV7","AAV8","AAV9",
+                           "AAV10","AAV11","AAV12","AAV13","AAVrh8","AAVrh10","AAVrh32", "multiple alignment", "gap")
+frequencies <- subset(frequencies, select = -c(gap))
+
+frequencies_final = colSums(frequencies)
+  
+#Abundance of AAV serotypes in the chimeric library
+serotypes_freq <- as.data.frame(frequencies_final)
+colnames(serotypes_freq) <- c("Freq")
+serotypes_freq['Freq(%)'] <- round(serotypes_freq$Freq*100/sum(serotypes_freq$Freq), 2)
+serotypes_freq <- serotypes_freq[order(serotypes_freq$`Freq(%)`, decreasing = T), ]
+print(serotypes_freq[-1])
+  
+```
+
+```{r}
+  
+col = c("#D3D3D3", "#A6CEE3", "#1F78B4", "#B2DF8A", "#555555", "#33A02C",
+        "#FB9A99", "#E31A1C", "#FDBF6F", "#FF7F00", "#CAB2D6", "#6A3D9A",
+        "#FFFF99", "#B15928", "yellow", "#999999", "#a70000", "black", "white")
+legend_name <- c("no alignment", "AAV1", "AAV2", "AAV3", "AAV4", "AAV5",
+                 "AAV6", "AAV7", "AAV8", "AAV9", "AAV10", "AAV11", "AAV12", 
+                 "AAV13", "AAVrh8", "AAVrh10", "AAVrh32", "multiple alignment", "gap")
+col_df <- data.frame(col = col)
+rownames(col_df) <- legend_name
+  
+  
+plot.serotype.frequency <- function(serotypes_freq, col_df, library_name = ""){
+  serotypes_freq['Name'] <- rownames(serotypes_freq)
+  col_ordered <- col_df[serotypes_freq[order(serotypes_freq$`Freq(%)`, decreasing = T), "Name"],]
+  
+  p <- ggplot2::ggplot(data=serotypes_freq, 
+                        aes(x=factor(Name, serotypes_freq[order(`Freq(%)`, decreasing = T), "Name"]), 
+                            y=`Freq(%)`, 
+                            order=`Freq(%)`)) +
+          geom_bar(stat="identity", fill=col_ordered)+
+          geom_text(aes(label=`Freq(%)`), vjust=-0.3, size=3.5) + 
+          labs(#title=paste0("Distribution of AAV serotypes in ", library_name),
+               x ="", y = "Frequency (%)") +
+          theme_minimal() +
+          theme(plot.title = element_text(hjust = 0.5)) +
+          theme(axis.text.x = element_text(angle = 45, hjust = 1, size=10)) 
+  print(p)
+}
+
+graphics.off()
+pdf(file.path("data_simulation_plots/serotype_distribution_chimeric_lib_true.pdf"), width=8, height=5)
+plot.serotype.frequency(serotypes_freq, col_df = col_df, library_name = "chimeric library")
+dev.off()
+```
+
+```{r}
+
+plot.variant.description <- function(matrix, col_df, library_name = ""){
+  gplots::heatmap.2(matrix, 
+                    dendrogram='none', 
+                    Colv=FALSE, 
+                    Rowv=FALSE, #TRUE 
+                    trace="none", 
+                    breaks = seq(-0.5, 18.5, 1), 
+                    col = col_df$col, 
+                    key = FALSE, 
+                    cexRow=0.7)
+  title(paste0("Variant description of ", library_name), 
+        line = -2, 
+        adj = 0.6)
+  legend(x="bottomleft", 
+         legend=rownames(col_df), 
+         fill=col_df$col,  
+         title = "AAV serotypes", 
+         title.adj = 0.2, 
+         inset=c(-.07, -.07), 
+         xpd=TRUE,
+         box.lwd = 0, 
+         cex = 0.7)
+
+}
+```
+
+
+```{r}
+representatives <- read.csv("hafoe_out_sim_100_15/files/clstr_chimeric_lib/representatives.csv", header = F)
+matrix_rep <- matrix_all[rownames(matrix_all) %in% representatives$V1,]
+
+graphics.off()
+pdf(file.path("data_simulation_plots/variant_description_chimeric_rep_true.pdf"), width=8, height=5)
+plot.variant.description(matrix_rep, col_df = col_df,
+                         library_name = "generated library \n(representatives chosen by the program)\n")
+dev.off()
+```
+
