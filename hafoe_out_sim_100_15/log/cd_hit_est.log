@@ -1,0 +1,37 @@
+================================================================
+Program: CD-HIT, V4.8.1 (+OpenMP), Oct 04 2021, 09:00:04
+Command: /storage2/proj/kodikaz/softwares/cdhit/cd-hit-est -i
+         hafoe_out_sim_100_15/files/Chimeric_ORF.fasta -o
+         hafoe_out_sim_100_15/files/clstr_chimeric_lib/clstr_chim.fasta
+         -g 1 -d 100 -c 0.9 -n 9 -G 0 -aL 0.9
+
+Started: Mon May 16 15:25:50 2022
+================================================================
+                            Output                              
+----------------------------------------------------------------
+total seq: 7254
+longest and shortest : 2226 and 2181
+Total letters: 16056111
+Sequences have been sorted
+
+Approximated minimal memory consumption:
+Sequence        : 17M
+Buffer          : 1 X 12M = 12M
+Table           : 1 X 4M = 4M
+Miscellaneous   : 1M
+Total           : 35M
+
+Table limit with the given memory limit:
+Max number of representatives: 330213
+Max number of word counting entries: 95606231
+
+comparing sequences from          0  to       7254
+.......
+     7254  finished         89  clusters
+
+Approximated maximum memory consumption: 36M
+writing new database
+writing clustering information
+program completed !
+
+Total CPU time 153.85
