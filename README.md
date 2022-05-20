@@ -6,6 +6,9 @@ The simulated chimeric library datasets are input_files/Chimeric_lib_simulated.s
 ## Paper
 Pdf file of the report is Capstone_Paper_TJ.pdf and accompanying latex files are in Capstone Paper latex.zip.
 
+## Fully reproducible code (R markdown)
+To get the paper results in on code file and without installing external tools (the files that should be produced by the tools are used from already made hafoe_out_sim_100_15/ directory), use this file, otherwise see descriptions bellow.
+
 ## Data simulation
 The data simulation code is data_simulation.Rmd, which generates and stores the datasets into input_files/ directory. The code also includes making visualizations on the simulated data and stores the figures in data_simulation_plots/ directory. The files in this directory correspond to Fgures 3a, 4a, 7, 8 of the paper
 
